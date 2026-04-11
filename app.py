@@ -195,15 +195,15 @@ def fetch_claude_cached(cfg: dict, _svc: dict) -> dict:
 
 
 def _fmt_reset(iso: str) -> str:
-    """'2026-04-11T08:00:00+00:00' → 'in 3h 22m'"""
+    """'2026-04-11T08:00:00+00:00' → 'in 1w2d' / 'in 6d20h' / 'in 3h 22m'"""
     try:
         from datetime import datetime, timezone
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
         secs = int((dt - datetime.now(timezone.utc)).total_seconds())
         if secs < 0:
             return "soon"
-        h, m = divmod(secs // 60, 60)
-        return f"in {h}h {m:02d}m" if h else f"in {m}m"
+        short = _fmt_secs_short(secs)
+        return f"in {short}" if short != "now" else "now"
     except Exception:
         return iso[:16]
 
