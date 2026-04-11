@@ -25,20 +25,22 @@ Tokemon reads `~/.config/tokemon/config.json` (created from `config.example.json
 ```json
 {
   "claude": {
-    "org_id": "<your-org-id>",
-    "session_cookie": "<your-session-cookie>"
+    "org_id": "<org-id>",
+    "session_cookie": "<cookie>"
   },
   "openrouter": {
     "api_key": "sk-or-v1-..."
   },
   "amp": {
-    "session_cookie": "<your-session-cookie>"
+    "session_cookie": "<cookie>"
   },
   "codex": {
-    "bearer_token": "<your-bearer-token>"
+    "bearer_token": "<token>"
   }
 }
 ```
+
+This gives you all six rows shown in the overlay: **Claude cur** (5h window), **Claude wk** (7d window), **OpenRouter**, **Amp fr** (free tier), **Amp cr** (credits), and **Codex fr**.
 
 ### Setup
 
