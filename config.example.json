@@ -1,0 +1,33 @@
+{
+  "claude": {
+    "org_id": "3eca7cd8-66de-4ed6-bf8f-0db1b6073456",
+    "browsers": ["chrome", "firefox"],
+    "session_cookie": "",
+    "anthropic-anonymous-id": "",
+    "anthropic-device-id": ""
+  },
+
+  "openrouter": {
+    "api_key": "sk-or-v1-..."
+  },
+
+  "extra_services": [
+    {
+      "_comment": "Generic service — fill in endpoint/auth/fields once you know the API shape.",
+      "id":       "codex",
+      "label":    "Codex",
+      "type":     "generic",
+      "endpoint": "",
+      "auth": {
+        "type":  "bearer",
+        "token": ""
+      },
+      "fields": {
+        "used":  "usage",
+        "limit": "limit",
+        "reset": "reset_at",
+        "unit":  "$"
+      }
+    }
+  ]
+}
