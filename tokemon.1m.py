@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# <xbar.title>Tokmon</xbar.title>
+# <xbar.title>Tokemon</xbar.title>
 # <xbar.version>v0.1</xbar.version>
 # <xbar.refreshTime>5m</xbar.refreshTime>
 # <xbar.dependencies>python3,browser-cookie3,requests</xbar.dependencies>
 
 """
-Tokmon — SwiftBar/xbar menu bar plugin
+Tokemon — SwiftBar/xbar menu bar plugin
 Shows remaining credits/usage for Claude.ai, Amp, and OpenRouter.
 
-Config file: ~/.config/tokmon/config.json
+Config file: ~/.config/tokemon/config.json
 See config.example.json alongside this script for the schema.
 """
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import requests
 
-CONFIG_PATH = Path.home() / ".config" / "tokmon" / "config.json"
+CONFIG_PATH = Path.home() / ".config" / "tokemon" / "config.json"
 
 
 # ─── Config ──────────────────────────────────────────────────────────────────

@@ -3,9 +3,9 @@
 all: build
 
 build:
-	pyinstaller -y Tokmon.spec
+	pyinstaller -y Tokemon.spec
 
 restart: build
-	-pkill -f Tokmon
+	-pkill -f Tokemon
 	@sleep 1
-	open dist/Tokmon.app
+	open dist/Tokemon.app

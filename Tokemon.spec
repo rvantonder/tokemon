@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Build: pyinstaller Tokmon.spec
+# Build: pyinstaller Tokemon.spec
 
 import os
 from pathlib import Path
@@ -36,7 +36,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Tokmon',
+    name='Tokemon',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -52,14 +52,14 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Tokmon',
+    name='Tokemon',
 )
 
 app = BUNDLE(
     coll,
-    name='Tokmon.app',
+    name='Tokemon.app',
     icon=None,
-    bundle_identifier='com.rvt.tokmon',
+    bundle_identifier='com.rvt.tokemon',
     info_plist={
         'LSUIElement': True,           # hides from dock + app switcher
         'NSAppleEventsUsageDescription': 'Needed to read browser cookies for Claude.ai auth.',

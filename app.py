@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tokmon — macOS menu bar + floating overlay app."""
+"""Tokemon — macOS menu bar + floating overlay app."""
 
 import json
 import queue
@@ -32,8 +32,8 @@ from Foundation import NSMakeRect, NSMutableAttributedString, NSOperationQueue
 
 NSVisualEffectMaterialHUDWindow = 6
 
-CONFIG_PATH   = Path.home() / ".config" / "tokmon" / "config.json"
-POSITION_PATH = Path.home() / ".config" / "tokmon" / "window_pos.json"
+CONFIG_PATH   = Path.home() / ".config" / "tokemon" / "config.json"
+POSITION_PATH = Path.home() / ".config" / "tokemon" / "window_pos.json"
 REFRESH_INTERVAL = 60
 
 ROW_H     = 20
@@ -83,9 +83,11 @@ BUILTIN_SERVICES = [
 
 
 def load_services(cfg: dict) -> list[dict]:
-    services = list(BUILTIN_SERVICES)
-    for svc in cfg.get("extra_services", []):
-        if svc.get("id") and svc.get("label"):
+    seen: set[str] = set()
+    services: list[dict] = []
+    for svc in list(BUILTIN_SERVICES) + cfg.get("extra_services", []):
+        if svc.get("id") and svc.get("label") and svc["id"] not in seen:
+            seen.add(svc["id"])
             services.append({**svc, "type": svc.get("type", "generic")})
     return services
 
@@ -864,7 +866,7 @@ class Overlay:
 
 # ─── Rumps app ───────────────────────────────────────────────────────────────
 
-class LLMCreditsApp(rumps.App):
+class TokemonApp(rumps.App):
     def __init__(self):
         cfg = load_config()
         self._services = load_services(cfg)
@@ -872,7 +874,7 @@ class LLMCreditsApp(rumps.App):
         self._svc_items: dict[str, list[rumps.MenuItem]] = {
             svc["id"]: [
                 rumps.MenuItem(f"  {svc['label']}  loading…"),
-                rumps.MenuItem("    —"),
+                rumps.MenuItem(f"  {svc['label']}  —"),
             ]
             for svc in self._services
         }
@@ -890,7 +892,7 @@ class LLMCreditsApp(rumps.App):
             rumps.MenuItem("Quit", callback=self._quit),
         ]
 
-        super().__init__(name="LLM Credits", title="⬡", menu=menu, quit_button=None)
+        super().__init__(name="Tokemon", title="⬡", menu=menu, quit_button=None)
         ensure_config()
 
         self._overlay = None  # created on first _apply_pending tick
@@ -975,4 +977,4 @@ class LLMCreditsApp(rumps.App):
 # ─── Entry ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    LLMCreditsApp().run()
+    TokemonApp().run()
