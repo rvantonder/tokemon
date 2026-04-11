@@ -11,7 +11,7 @@ Tracks usage for **Claude**, **OpenRouter**, **Amp**, and **Codex** in a single 
 ## Install
 
 ```bash
-curl -L https://github.com/rvantonder/tokemon/releases/download/0.0.1/Tokemon.0.0.1.zip -o Tokemon.zip && unzip Tokemon.zip && open Tokemon.app
+curl -L https://github.com/rvantonder/tokemon/releases/download/0.0.2/Tokemon.0.0.2.zip -o Tokemon.zip && unzip Tokemon.zip && open Tokemon.app
 ```
 
 Or download the latest zip from [Releases](https://github.com/rvantonder/tokemon/releases) and unzip it.
