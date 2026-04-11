@@ -18,6 +18,7 @@ a = Analysis(
         'pycryptodomex',
         'lz4',
         'lz4.frame',
+        'certifi',
     ],
     hookspath=[],
     hooksconfig={},

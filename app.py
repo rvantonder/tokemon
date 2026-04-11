@@ -2,11 +2,24 @@
 """Tokemon — macOS menu bar + floating overlay app."""
 
 import json
+import os
 import queue
 import subprocess
 import threading
 import traceback
 from pathlib import Path
+
+# Fix TLS CA bundle path inside PyInstaller bundles.
+# requests/urllib3 check SSL_CERT_FILE / REQUESTS_CA_BUNDLE at import time;
+# those env vars are unset in a frozen .app, so point them at certifi's bundle
+# before importing requests.
+try:
+    import certifi as _certifi
+    _ca = _certifi.where()
+    os.environ.setdefault("SSL_CERT_FILE", _ca)
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
+except Exception:
+    pass
 
 import requests
 import rumps
