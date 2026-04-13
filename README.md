@@ -2,8 +2,6 @@
 
 macOS menu bar + floating overlay for monitoring token usage across LLM services.
 
-> **Disclaimer:** Tokemon is an unofficial personal tool and is not affiliated with, endorsed by, or supported by Anthropic, OpenRouter, Sourcegraph (Amp), or OpenAI. It accesses usage data from each service using credentials you provide (session cookies, API keys, bearer tokens). Those credentials are stored locally in `~/.config/tokemon/config.json` and are sent only to the respective service's own API endpoint. No data is collected, transmitted, or shared by this tool beyond those direct API calls. Use at your own risk. Session cookies and tokens are sensitive — treat the config file like a password and ensure it is not committed to version control or shared.
-
 ![Tokemon overlay](screenshot.png)
 
 Tracks usage for **Claude**, **OpenRouter**, **Amp**, and **Codex** in a single always-on-top window.
@@ -130,6 +128,8 @@ You can add custom services via the `extra_services` array in config. Each entry
 ## How it works
 
 Tokemon runs a background thread that polls each configured service's usage API endpoint every 60 seconds. Each service authenticates with the credential you provide (session cookie, API key, or bearer token) and the response is parsed for `used`, `limit`, and `reset` fields. The overlay window is updated in place — no server, no daemon, no background process beyond the app itself. The SwiftBar/xbar plugin variant (`tokemon.1m.py`) relies on xbar's built-in refresh mechanism instead.
+
+> **Disclaimer:** Tokemon is an unofficial personal tool and is not affiliated with, endorsed by, or supported by Anthropic, OpenRouter, Sourcegraph (Amp), or OpenAI. It accesses usage data from each service using credentials you provide (session cookies, API keys, bearer tokens). Those credentials are stored locally in `~/.config/tokemon/config.json` and are sent only to the respective service's own API endpoint. No data is collected, transmitted, or shared by this tool beyond those direct API calls. Use at your own risk. Session cookies and tokens are sensitive — treat the config file like a password and ensure it is not committed to version control or shared.
 
 ## License
 
