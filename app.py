@@ -11,13 +11,26 @@ from pathlib import Path
 
 # Fix TLS CA bundle path inside PyInstaller bundles.
 # requests/urllib3 check SSL_CERT_FILE / REQUESTS_CA_BUNDLE at import time;
-# those env vars are unset in a frozen .app, so point them at certifi's bundle
-# before importing requests.
+# those env vars can be unset or inherited with stale paths in a frozen .app,
+# so point missing/invalid values at certifi's bundle before importing requests.
 try:
+    import shutil
     import certifi as _certifi
-    _ca = _certifi.where()
-    os.environ.setdefault("SSL_CERT_FILE", _ca)
-    os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
+    _ca_source = Path(_certifi.where())
+    _ca = str(_ca_source)
+    try:
+        # The bundled certifi file lives under dist/Tokemon.app. During local
+        # development that bundle can be rebuilt or deleted while Tokemon is
+        # still running, so copy the CA bundle to a stable per-user location.
+        _stable_ca = Path.home() / ".config" / "tokemon" / "cacert.pem"
+        _stable_ca.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ca_source, _stable_ca)
+        _ca = str(_stable_ca)
+    except Exception:
+        pass
+    for _var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        if not os.environ.get(_var) or not Path(os.environ[_var]).exists():
+            os.environ[_var] = _ca
 except Exception:
     pass
 
@@ -71,12 +84,22 @@ SERVICE_DOT_COLORS: dict[str, NSColor] = {}   # populated after NSApp init
 
 SERVICE_DOT_HEX = {
     "claude_5h":  "#d97757",
-    "claude_7d":  "#d97757",
+    "claude_7d":  "#b86447",
     "openrouter": "#94a3b8",
     "amp":          "#b9f7ce",
     "amp_credits":  "#7ce8a0",
     "codex":        "#6b95c7",   # muted #024ede
-    "codex_7d":     "#6b95c7",
+    "codex_7d":     "#5679a6",
+}
+
+SERVICE_BAR_COLOR_IDS = {
+    "claude_5h",
+    "claude_7d",
+    "amp",
+    "amp_credits",
+    "openrouter",
+    "codex",
+    "codex_7d",
 }
 
 
@@ -88,19 +111,34 @@ SERVICE_DOT_HEX = {
 
 BUILTIN_SERVICES = [
     {"id": "claude_5h",   "label": "Claude 5hr",  "type": "claude_5h"},
-    {"id": "codex",       "label": "Codex 5hr",   "type": "codex"},
-    {"id": "amp",         "label": "Amp 10hr",    "type": "amp"},
     {"id": "claude_7d",   "label": "Claude wk",   "type": "claude_7d"},
-    {"id": "amp_credits", "label": "Amp",         "type": "amp_credits"},
+    {"id": "codex",       "label": "Codex 5hr",   "type": "codex"},
     {"id": "codex_7d",    "label": "Codex wk",    "type": "codex_7d"},
+    {"id": "amp",         "label": "Amp 10hr",    "type": "amp"},
+    {"id": "amp_credits", "label": "Amp",         "type": "amp_credits"},
     {"id": "openrouter",  "label": "OpenRouter",  "type": "openrouter"},
 ]
+
+
+def _builtin_service_enabled(service_id: str, cfg: dict) -> bool:
+    if service_id in {"claude_5h", "claude_7d"}:
+        return bool(cfg.get("claude", {}).get("org_id"))
+    if service_id in {"codex", "codex_7d"}:
+        return bool(cfg.get("codex", {}).get("bearer_token"))
+    if service_id in {"amp", "amp_credits"}:
+        return bool(cfg.get("amp", {}).get("session_cookie"))
+    if service_id == "openrouter":
+        return bool(cfg.get("openrouter", {}).get("api_key"))
+    return True
 
 
 def load_services(cfg: dict) -> list[dict]:
     seen: set[str] = set()
     services: list[dict] = []
-    for svc in list(BUILTIN_SERVICES) + cfg.get("extra_services", []):
+    builtin_services = [
+        svc for svc in BUILTIN_SERVICES if _builtin_service_enabled(svc["id"], cfg)
+    ]
+    for svc in builtin_services + cfg.get("extra_services", []):
         if svc.get("id") and svc.get("label") and svc["id"] not in seen:
             seen.add(svc["id"])
             services.append({**svc, "type": svc.get("type", "generic")})
@@ -366,7 +404,7 @@ def parse_openrouter(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
         remaining = total - cr_used
         pct_used  = int(100 * cr_used / total) if total else 0
         return (
-            f"{_bar(pct_used)} ${remaining:.2f}",
+            f"{_bar(100)} ${remaining:.2f}",
             f"OR ${remaining:.2f}",
             [f"Remaining: ${remaining:.4f}", f"Used: ${cr_used:.4f} / ${total:.4f}"] + details,
         )
@@ -641,14 +679,13 @@ def parse_amp_credits(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     # When free tier is overdrawn, the deficit comes out of paid credits
     balance    = paid_avail + min(0, free_avail)
     total      = paid_used + paid_avail
-    pct_used   = int(100 * paid_used / total) if total else 0
 
     details = [
         f"Balance: ${balance:.2f}",
         f"Spent: ${paid_used:.2f} / ${total:.2f}",
     ]
 
-    return f"{_bar(pct_used)} ${balance:.2f}", f"AC ${balance:.2f}", details
+    return f"{_bar(100)} ${balance:.2f}", f"AC ${balance:.2f}", details
 
 
 # ─── Service: Codex ─────────────────────────────────────────────────────────
@@ -709,8 +746,7 @@ def parse_codex(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     mb_lbl    = f"CX {int(pct)}%"
     details   = [f"{bar} {int(pct)}%  ↺{reset_long}" if reset_long else f"{bar} {int(pct)}%",
                  f"Plan: {plan}"]
-    # Signal the overlay to use "Codex (fr)" as the row label (abbreviated to keep alignment)
-    data["_display_label"] = f"Codex {plan[:2]}"
+    data["_display_label"] = "Codex 5hr"
     return bar_lbl, mb_lbl, details
 
 
@@ -879,6 +915,16 @@ class Overlay:
             astr.addAttribute_value_range_(NSFontAttributeName,            font,       full_rng)
             astr.addAttribute_value_range_(NSForegroundColorAttributeName, text_color, full_rng)
             astr.addAttribute_value_range_(NSForegroundColorAttributeName, dot_color,  (0, 1))
+            if svc_id in SERVICE_BAR_COLOR_IDS and text.startswith("▕"):
+                bar_end = text.find(" ")
+                if bar_end == -1:
+                    bar_end = len(text)
+                text_start = len(full) - len(text)
+                astr.addAttribute_value_range_(
+                    NSForegroundColorAttributeName,
+                    dot_color,
+                    (text_start, bar_end),
+                )
             lbl.setAttributedStringValue_(astr)
         else:
             lbl.setStringValue_(full)

@@ -19,6 +19,27 @@ import sys
 import traceback
 from pathlib import Path
 
+# requests honors these environment variables when choosing a TLS CA bundle.
+# SwiftBar/xbar can inherit stale paths, so repair missing/invalid values before
+# importing requests.
+try:
+    import shutil
+    import certifi as _certifi
+    _ca_source = Path(_certifi.where())
+    _ca = str(_ca_source)
+    try:
+        _stable_ca = Path.home() / ".config" / "tokemon" / "cacert.pem"
+        _stable_ca.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ca_source, _stable_ca)
+        _ca = str(_stable_ca)
+    except Exception:
+        pass
+    for _var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        if not os.environ.get(_var) or not Path(os.environ[_var]).exists():
+            os.environ[_var] = _ca
+except Exception:
+    pass
+
 import requests
 
 CONFIG_PATH = Path.home() / ".config" / "tokemon" / "config.json"

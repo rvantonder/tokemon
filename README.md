@@ -9,18 +9,21 @@ Tracks usage for **Claude**, **OpenRouter**, **Amp**, and **Codex** in a single 
 ## Install
 
 ```bash
-curl -L https://github.com/rvantonder/tokemon/releases/download/0.0.3/Tokemon.0.0.3.zip -o Tokemon.zip && unzip Tokemon.zip && open Tokemon.app
+curl -L https://github.com/rvantonder/tokemon/releases/download/0.0.4/Tokemon.0.0.4.zip -o Tokemon.zip && unzip -q Tokemon.zip && mkdir -p ~/Applications && ditto Tokemon.app ~/Applications/Tokemon.app && open ~/Applications/Tokemon.app
 ```
 
-Or download the latest zip from [Releases](https://github.com/rvantonder/tokemon/releases) and unzip it.
+Or download the latest zip from [Releases](https://github.com/rvantonder/tokemon/releases), unzip it, copy `Tokemon.app` to `/Applications` or `~/Applications`, and open it from there. If you are upgrading an existing install, quit Tokemon before replacing the app bundle.
+
+Tokemon keeps its configuration in `~/.config/tokemon/config.json`, outside the app bundle, so replacing `Tokemon.app` does not remove your settings.
 
 ### Build from source
 
 ```bash
 pip install requests rumps pyobjc browser-cookie3 pyinstaller
-make build
-open dist/Tokemon.app
+make restart
 ```
+
+`dist/Tokemon.app` is a development build artifact. For day-to-day use, run Tokemon from `/Applications` or `~/Applications` instead of keeping it in `dist/`.
 
 ## Configuration
 
