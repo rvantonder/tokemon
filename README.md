@@ -44,7 +44,7 @@ Tokemon reads `~/.config/tokemon/config.json` (created from `config.example.json
 }
 ```
 
-This gives you all six rows shown in the overlay: **Claude cur** (5h window), **Claude wk** (7d window), **OpenRouter**, **Amp fr** (free tier), **Amp cr** (credits), and **Codex fr**.
+This gives you all seven rows shown in the overlay: **Claude cur** (5h window), **Claude wk** (7d window), **OpenRouter**, **Amp fr** (free tier), **Amp cr** (credits), **Codex fr** (current window), and **Codex wk** (7d window).
 
 ### Setup
 

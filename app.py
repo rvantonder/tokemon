@@ -76,6 +76,7 @@ SERVICE_DOT_HEX = {
     "amp":          "#b9f7ce",
     "amp_credits":  "#7ce8a0",
     "codex":        "#6b95c7",   # muted #024ede
+    "codex_7d":     "#6b95c7",
 }
 
 
@@ -92,6 +93,7 @@ BUILTIN_SERVICES = [
     {"id": "amp",          "label": "Amp",         "type": "amp"},
     {"id": "amp_credits", "label": "Amp cr",      "type": "amp_credits"},
     {"id": "codex",       "label": "Codex",       "type": "codex"},
+    {"id": "codex_7d",    "label": "Codex wk",    "type": "codex_7d"},
 ]
 
 
@@ -712,6 +714,31 @@ def parse_codex(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     return bar_lbl, mb_lbl, details
 
 
+def parse_codex_7d(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
+    if data.get("_unconfigured"):
+        return "not configured", "–", ["Set codex.bearer_token in config"]
+    if err := data.get("_error"):
+        return f"✗ {err}", "✗", [f"Error: {err}"]
+
+    plan  = data.get("plan_type", "?")
+    sw    = (data.get("rate_limit") or {}).get("secondary_window") or {}
+    pct   = sw.get("used_percent")
+
+    if pct is None:
+        return f"({plan}) ?", "CX ?", [f"Plan: {plan}", "No secondary_window in response"]
+
+    reset_after = sw.get("reset_after_seconds")
+    reset_str   = _fmt_secs_short(int(reset_after)) if isinstance(reset_after, (int, float)) else ""
+    reset_long  = f"in {reset_str}" if reset_str and reset_str != "now" else (reset_str or "")
+    bar         = _bar(int(pct))
+    bar_lbl     = f"{bar} {int(pct)}% ({reset_str})" if reset_str else f"{bar} {int(pct)}%"
+    mb_lbl      = f"CX↗{int(pct)}%"
+    details     = [f"{bar} {int(pct)}%  ↺{reset_long}" if reset_long else f"{bar} {int(pct)}%",
+                   f"Plan: {plan}"]
+    data["_display_label"] = "Codex wk"
+    return bar_lbl, mb_lbl, details
+
+
 # ─── Dispatch table ──────────────────────────────────────────────────────────
 
 HANDLERS = {
@@ -721,6 +748,7 @@ HANDLERS = {
     "amp":          (fetch_amp,           parse_amp),
     "amp_credits":  (fetch_amp_credits,  parse_amp_credits),
     "codex":        (fetch_codex,        parse_codex),
+    "codex_7d":     (fetch_codex,        parse_codex_7d),
     "generic":     (fetch_generic,       parse_generic),
 }
 
