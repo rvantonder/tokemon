@@ -87,13 +87,13 @@ SERVICE_DOT_HEX = {
 # Generic entries also carry: endpoint, auth {type, token|cookie}, fields {used,limit,reset}
 
 BUILTIN_SERVICES = [
-    {"id": "claude_5h",   "label": "Claude cur",  "type": "claude_5h"},
+    {"id": "claude_5h",   "label": "Claude 5hr",  "type": "claude_5h"},
+    {"id": "codex",       "label": "Codex 5hr",   "type": "codex"},
+    {"id": "amp",         "label": "Amp 10hr",    "type": "amp"},
     {"id": "claude_7d",   "label": "Claude wk",   "type": "claude_7d"},
-    {"id": "openrouter",  "label": "OpenRouter",  "type": "openrouter"},
-    {"id": "amp",          "label": "Amp",         "type": "amp"},
-    {"id": "amp_credits", "label": "Amp cr",      "type": "amp_credits"},
-    {"id": "codex",       "label": "Codex",       "type": "codex"},
+    {"id": "amp_credits", "label": "Amp",         "type": "amp_credits"},
     {"id": "codex_7d",    "label": "Codex wk",    "type": "codex_7d"},
+    {"id": "openrouter",  "label": "OpenRouter",  "type": "openrouter"},
 ]
 
 
@@ -574,7 +574,7 @@ def parse_amp(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     if hourly:
         details.append(f"Replenishes +${hourly/100:.2f}/hr")
 
-    data["_display_label"] = "Amp fr"
+    data["_display_label"] = "Amp 10hr"
     return (
         f"{_bar(pct_used)} ${remaining_usd:.2f}",
         f"Amp ${remaining_usd:.2f}",
