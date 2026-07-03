@@ -4,6 +4,7 @@
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import traceback
@@ -82,7 +83,7 @@ def _hex_color(h: str) -> NSColor:
 # Colored dot (●) per service id — None = no dot
 SERVICE_DOT_COLORS: dict[str, NSColor] = {}   # populated after NSApp init
 
-SERVICE_DOT_HEX = {
+SERVICE_TYPE_DOT_HEX = {
     "claude_5h":  "#d97757",
     "claude_7d":  "#b86447",
     "openrouter": "#94a3b8",
@@ -92,7 +93,7 @@ SERVICE_DOT_HEX = {
     "codex_7d":     "#5679a6",
 }
 
-SERVICE_BAR_COLOR_IDS = {
+SERVICE_BAR_COLOR_TYPES = {
     "claude_5h",
     "claude_7d",
     "amp",
@@ -112,8 +113,6 @@ SERVICE_BAR_COLOR_IDS = {
 BUILTIN_SERVICES = [
     {"id": "claude_5h",   "label": "Claude 5hr",  "type": "claude_5h"},
     {"id": "claude_7d",   "label": "Claude wk",   "type": "claude_7d"},
-    {"id": "codex",       "label": "Codex 5hr",   "type": "codex"},
-    {"id": "codex_7d",    "label": "Codex wk",    "type": "codex_7d"},
     {"id": "amp",         "label": "Amp 10hr",    "type": "amp"},
     {"id": "amp_credits", "label": "Amp",         "type": "amp_credits"},
     {"id": "openrouter",  "label": "OpenRouter",  "type": "openrouter"},
@@ -123,22 +122,96 @@ BUILTIN_SERVICES = [
 def _builtin_service_enabled(service_id: str, cfg: dict) -> bool:
     if service_id in {"claude_5h", "claude_7d"}:
         return bool(cfg.get("claude", {}).get("org_id"))
-    if service_id in {"codex", "codex_7d"}:
-        return bool(cfg.get("codex", {}).get("bearer_token"))
-    if service_id in {"amp", "amp_credits"}:
+    if service_id == "amp":
+        return bool(cfg.get("amp", {}).get("session_cookie")) and not cfg.get("amp", {}).get("hide_free_tier")
+    if service_id == "amp_credits":
         return bool(cfg.get("amp", {}).get("session_cookie"))
     if service_id == "openrouter":
         return bool(cfg.get("openrouter", {}).get("api_key"))
     return True
 
 
+def _slugify_service_id(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", text.strip().lower()).strip("_")
+    return slug or "codex_account"
+
+
+def _normalize_codex_accounts(cfg: dict) -> list[dict]:
+    accounts: list[dict] = []
+
+    legacy_bearer = cfg.get("codex", {}).get("bearer_token")
+    if legacy_bearer:
+        accounts.append({
+            "id": "codex",
+            "label": "Codex",
+            "bearer_token": legacy_bearer,
+        })
+
+    used_ids = {acct["id"] for acct in accounts}
+    for i, raw in enumerate(cfg.get("codex_accounts", []), start=2):
+        if not isinstance(raw, dict):
+            continue
+        bearer = raw.get("bearer_token", "")
+        if not bearer:
+            continue
+        label = (raw.get("label") or raw.get("name") or f"Codex{i}").strip()
+        base_id = raw.get("id") or _slugify_service_id(label)
+        svc_id = base_id
+        suffix = 2
+        while svc_id in used_ids:
+            svc_id = f"{base_id}_{suffix}"
+            suffix += 1
+        used_ids.add(svc_id)
+        accounts.append({
+            "id": svc_id,
+            "label": label,
+            "bearer_token": bearer,
+            "dot_hex": raw.get("dot_hex"),
+        })
+
+    return accounts
+
+
+def _codex_services(cfg: dict) -> list[dict]:
+    accounts = _normalize_codex_accounts(cfg)
+    services: list[dict] = []
+    for acct in accounts:
+        services.append({
+            "id": acct["id"],
+            "label": f'{acct["label"]} 5hr',
+            "type": "codex",
+            "account_id": acct["id"],
+            "dot_hex": acct.get("dot_hex"),
+        })
+        services.append({
+            "id": f'{acct["id"]}_7d',
+            "label": f'{acct["label"]} wk',
+            "type": "codex_7d",
+            "account_id": acct["id"],
+            "dot_hex": acct.get("dot_hex"),
+        })
+    return services
+
+
 def load_services(cfg: dict) -> list[dict]:
     seen: set[str] = set()
     services: list[dict] = []
-    builtin_services = [
-        svc for svc in BUILTIN_SERVICES if _builtin_service_enabled(svc["id"], cfg)
-    ]
-    for svc in builtin_services + cfg.get("extra_services", []):
+    codex_services = _codex_services(cfg)
+    builtin_services = {
+        svc["id"]: svc
+        for svc in BUILTIN_SERVICES
+        if _builtin_service_enabled(svc["id"], cfg)
+    }
+    ordered = []
+    for svc_id in ("claude_5h", "claude_7d"):
+        if svc_id in builtin_services:
+            ordered.append(builtin_services[svc_id])
+    ordered.extend(codex_services)
+    for svc_id in ("amp", "amp_credits", "openrouter"):
+        if svc_id in builtin_services:
+            ordered.append(builtin_services[svc_id])
+
+    for svc in ordered + cfg.get("extra_services", []):
         if svc.get("id") and svc.get("label") and svc["id"] not in seen:
             seen.add(svc["id"])
             services.append({**svc, "type": svc.get("type", "generic")})
@@ -152,6 +225,14 @@ def label_width(services: list[dict]) -> int:
     # Block/circle chars render wider than ASCII; 20px safety margin
     chars = 2 + longest + 2 + 10 + 14
     return PAD_X * 2 + int(chars * 6.8)
+
+
+def _service_dot_hex(svc: dict) -> str | None:
+    return svc.get("dot_hex") or SERVICE_TYPE_DOT_HEX.get(svc.get("type", ""))
+
+
+def _service_uses_bar_color(svc: dict) -> bool:
+    return svc.get("type") in SERVICE_BAR_COLOR_TYPES
 
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -553,6 +634,28 @@ def _decode_sveltekit(data) -> dict:
     return _resolve(0)
 
 
+def _decode_sveltekit_remote_payload(outer: dict) -> dict:
+    """Decode old and current SvelteKit remote response envelopes."""
+    if not isinstance(outer, dict):
+        return outer
+    if outer.get("type") == "error":
+        msg = (outer.get("error") or {}).get("message", "unknown")
+        return {"_error": msg}
+
+    payload = None
+    if outer.get("type") == "result" and "result" in outer:
+        payload = outer.get("result")
+    elif "data" in outer:
+        payload = outer.get("data")
+    if payload is None:
+        return outer
+
+    decoded = _decode_sveltekit(payload)
+    if isinstance(decoded, dict) and "_" in decoded:
+        return decoded["_"]
+    return decoded
+
+
 def fetch_amp(cfg: dict, _svc: dict) -> dict:
     amp_cfg  = cfg.get("amp", {})
     cookie   = amp_cfg.get("session_cookie", "")
@@ -572,12 +675,7 @@ def fetch_amp(cfg: dict, _svc: dict) -> dict:
         r = requests.get(endpoint, headers=headers, timeout=10)
         r.raise_for_status()
         outer = r.json()
-        if isinstance(outer, dict) and outer.get("type") == "error":
-            msg = (outer.get("error") or {}).get("message", "unknown")
-            return {"_error": msg}
-        if isinstance(outer, dict) and outer.get("type") == "result":
-            return _decode_sveltekit(outer["result"])
-        return outer
+        return _decode_sveltekit_remote_payload(outer)
     except requests.HTTPError as e:
         code = e.response.status_code
         if code == 404:
@@ -622,10 +720,10 @@ def parse_amp(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
 
 # ─── Service: Amp Credits ────────────────────────────────────────────────────
 #
-# Fetches credit balance from the settings __data.json page-load data.
+# Fetches credit balance from the account settings panel remote.
 # The devalue-encoded node contains: credits.paid.{used, available} in cents.
 
-AMP_SETTINGS_DATA_URL = "https://ampcode.com/settings/__data.json"
+AMP_ACCOUNT_SETTINGS_ENDPOINT = "https://ampcode.com/_app/remote/rjke8/getAccountSettingsPanelData"
 
 
 def fetch_amp_credits(cfg: dict, _svc: dict) -> dict:
@@ -642,18 +740,12 @@ def fetch_amp_credits(cfg: dict, _svc: dict) -> dict:
         "x-sveltekit-pathname": "/settings",
     }
     try:
-        r = requests.get(AMP_SETTINGS_DATA_URL, headers=headers, timeout=10)
+        r = requests.get(AMP_ACCOUNT_SETTINGS_ENDPOINT, headers=headers, timeout=10)
         r.raise_for_status()
         outer = r.json()
-        # Find the node whose schema has a "credits" key
-        for node in outer.get("nodes", []):
-            if not isinstance(node, dict) or node.get("type") != "data":
-                continue
-            data_arr = node.get("data", [])
-            if not data_arr or not isinstance(data_arr[0], dict):
-                continue
-            if "credits" in data_arr[0]:
-                return _decode_sveltekit(data_arr)
+        data = _decode_sveltekit_remote_payload(outer)
+        if isinstance(data, dict) and (data.get("_error") or "credits" in data):
+            return data
         return {"_error": "credits node not found"}
     except requests.HTTPError as e:
         return {"_error": f"HTTP {e.response.status_code}"}
@@ -691,7 +783,12 @@ def parse_amp_credits(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
 # ─── Service: Codex ─────────────────────────────────────────────────────────
 
 def fetch_codex(cfg: dict, _svc: dict) -> dict:
-    bearer = cfg.get("codex", {}).get("bearer_token", "")
+    account_id = _svc.get("account_id", "codex")
+    bearer = ""
+    for account in _normalize_codex_accounts(cfg):
+        if account["id"] == account_id:
+            bearer = account.get("bearer_token", "")
+            break
     if not bearer:
         return {"_error": "no bearer_token in config", "_unconfigured": True}
     try:
@@ -729,7 +826,7 @@ def _fmt_secs_short(secs: int) -> str:
 
 def parse_codex(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     if data.get("_unconfigured"):
-        return "not configured", "–", ["Set codex.bearer_token in config"]
+        return "not configured", "–", ["Set a Codex bearer token in config"]
     if err := data.get("_error"):
         return f"✗ {err}", "✗", [f"Error: {err}"]
 
@@ -746,13 +843,13 @@ def parse_codex(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     mb_lbl    = f"CX {int(pct)}%"
     details   = [f"{bar} {int(pct)}%  ↺{reset_long}" if reset_long else f"{bar} {int(pct)}%",
                  f"Plan: {plan}"]
-    data["_display_label"] = "Codex 5hr"
+    data["_display_label"] = _svc.get("label", "Codex 5hr")
     return bar_lbl, mb_lbl, details
 
 
 def parse_codex_7d(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     if data.get("_unconfigured"):
-        return "not configured", "–", ["Set codex.bearer_token in config"]
+        return "not configured", "–", ["Set a Codex bearer token in config"]
     if err := data.get("_error"):
         return f"✗ {err}", "✗", [f"Error: {err}"]
 
@@ -771,7 +868,7 @@ def parse_codex_7d(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     mb_lbl      = f"CX↗{int(pct)}%"
     details     = [f"{bar} {int(pct)}%  ↺{reset_long}" if reset_long else f"{bar} {int(pct)}%",
                    f"Plan: {plan}"]
-    data["_display_label"] = "Codex wk"
+    data["_display_label"] = _svc.get("label", "Codex wk")
     return bar_lbl, mb_lbl, details
 
 
@@ -847,6 +944,7 @@ class DraggableWindow(NSWindow):
 class Overlay:
     def __init__(self, services: list[dict]):
         self._services = services
+        self._services_by_id = {svc["id"]: svc for svc in services}
         self._label_col_w = max(len(s["label"]) for s in services)
         win_w = label_width(services)
         win_h = PAD_TOP + len(services) * ROW_H + PAD_BOT
@@ -879,8 +977,9 @@ class Overlay:
         win.setAlphaValue_(0.93)
 
         # Build dot color table now that NSApp is initialised
-        for svc_id, hex_val in SERVICE_DOT_HEX.items():
-            SERVICE_DOT_COLORS[svc_id] = _hex_color(hex_val)
+        for svc in services:
+            if hex_val := _service_dot_hex(svc):
+                SERVICE_DOT_COLORS[svc["id"]] = _hex_color(hex_val)
 
         self._labels: dict[str, NSTextField] = {}
         for i, svc in enumerate(services):
@@ -902,7 +1001,8 @@ class Overlay:
         if svc_id not in self._labels:
             return
         text_color = {"ok": COL_WHITE, "error": COL_ERROR, "unconfigured": COL_DIM}[state]
-        label_name  = display_label or next(s["label"] for s in self._services if s["id"] == svc_id)
+        svc         = self._services_by_id[svc_id]
+        label_name  = display_label or svc["label"]
         padded      = label_name.ljust(self._label_col_w)
         full        = f"● {padded}  {text}"
         dot_color   = SERVICE_DOT_COLORS.get(svc_id)
@@ -915,7 +1015,7 @@ class Overlay:
             astr.addAttribute_value_range_(NSFontAttributeName,            font,       full_rng)
             astr.addAttribute_value_range_(NSForegroundColorAttributeName, text_color, full_rng)
             astr.addAttribute_value_range_(NSForegroundColorAttributeName, dot_color,  (0, 1))
-            if svc_id in SERVICE_BAR_COLOR_IDS and text.startswith("▕"):
+            if _service_uses_bar_color(svc) and text.startswith("▕"):
                 bar_end = text.find(" ")
                 if bar_end == -1:
                     bar_end = len(text)

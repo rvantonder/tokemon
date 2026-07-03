@@ -11,6 +11,24 @@
     "api_key": "sk-or-v1-..."
   },
 
+  "amp": {
+    "session_cookie": "",
+    "hide_free_tier": false
+  },
+
+  "codex": {
+    "bearer_token": ""
+  },
+
+  "codex_accounts": [
+    {
+      "id": "codex2",
+      "label": "Codex2",
+      "dot_hex": "#d84b4b",
+      "bearer_token": ""
+    }
+  ],
+
   "extra_services": [
     {
       "_comment": "Generic service — fill in endpoint/auth/fields once you know the API shape.",

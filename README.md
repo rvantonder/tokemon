@@ -39,17 +39,28 @@ Tokemon reads `~/.config/tokemon/config.json` (created from `config.example.json
     "api_key": "sk-or-v1-..."
   },
   "amp": {
-    "session_cookie": "<cookie>"
+    "session_cookie": "<cookie>",
+    "hide_free_tier": false
   },
   "codex": {
     "bearer_token": "<token>"
-  }
+  },
+  "codex_accounts": [
+    {
+      "id": "codex2",
+      "label": "Codex2",
+      "dot_hex": "#d84b4b",
+      "bearer_token": "<second-token>"
+    }
+  ]
 }
 ```
 
-This gives you all seven rows shown in the overlay: **Claude 5hr** (5h window), **Codex 5hr** (current window), **Amp 10hr** (free tier), **Claude wk** (7d window), **Amp** (credits), **Codex wk** (7d window), and **OpenRouter**.
+This gives you the standard rows shown in the overlay: **Claude 5hr** (5h window), **Codex 5hr** (current window), **Amp 10hr** (free tier), **Claude wk** (7d window), **Amp** (credits), **Codex wk** (7d window), and **OpenRouter**. Add entries under `codex_accounts` to monitor additional Codex accounts; each account gets its own `5hr` and `wk` rows.
 
 ### Setup
+
+`codex` remains the primary backward-compatible account. Extra Codex accounts go in `codex_accounts` with a unique `id` and the label you want displayed in Tokemon, for example `Codex2`. You can optionally set `dot_hex` on a Codex account to override its accent color, and `amp.hide_free_tier` to hide the `Amp 10hr` row.
 
 Paste the following prompt into your favorite AI coding agent and follow it to populate `~/.config/tokemon/config.json`:
 
@@ -66,13 +77,21 @@ Write them to ~/.config/tokemon/config.json using this template:
     "api_key": "sk-or-v1-..."
   },
   "amp": {
-    "session_cookie": "<session-cookie>"
+    "session_cookie": "<session-cookie>",
+    "hide_free_tier": false
   },
   "codex": {
     "bearer_token": "<bearer-token>"
+  },
+  "codex_accounts": [
+    {
+      "id": "codex2",
+      "label": "Codex2",
+      "dot_hex": "#d84b4b",
+      "bearer_token": "<second-bearer-token>"
+    }
   }
 }
-
 For each service:
 
 **Claude** — I need org_id and session_cookie from claude.ai.
@@ -92,11 +111,13 @@ Use Playwright to:
 1. Open https://ampcode.com/settings (I should already be logged in)
 2. Extract the cookie header from any network request to ampcode.com
 
-**Codex** — I need a bearer token from chatgpt.com.
+**Codex** — I need one bearer token per ChatGPT account from chatgpt.com.
 Use Playwright to:
 1. Open https://chatgpt.com (I should already be logged in)
 2. Intercept any request to chatgpt.com/backend-api/*
 3. Extract the Authorization header value (without the "Bearer " prefix)
+4. Put my primary account under `codex.bearer_token`
+5. Put any extra accounts under `codex_accounts`
 
 Only configure the services I tell you I use. Skip the rest.
 ````
