@@ -176,13 +176,15 @@ def _codex_services(cfg: dict) -> list[dict]:
     accounts = _normalize_codex_accounts(cfg)
     services: list[dict] = []
     for acct in accounts:
-        services.append({
-            "id": acct["id"],
-            "label": f'{acct["label"]} 5hr',
-            "type": "codex",
-            "account_id": acct["id"],
-            "dot_hex": acct.get("dot_hex"),
-        })
+        # Codex no longer reports a 5-hour window for this account shape.
+        # Keep the parser/fetch logic available, but do not show the row.
+        # services.append({
+        #     "id": acct["id"],
+        #     "label": f'{acct["label"]} 5hr',
+        #     "type": "codex",
+        #     "account_id": acct["id"],
+        #     "dot_hex": acct.get("dot_hex"),
+        # })
         services.append({
             "id": f'{acct["id"]}_7d',
             "label": f'{acct["label"]} wk',
@@ -399,6 +401,50 @@ def _codex_reset_strings(data: dict) -> tuple[str, str]:
     return "", text
 
 
+def _codex_windows(data: dict) -> list[dict]:
+    rate_limit = data.get("rate_limit") or {}
+    windows: list[dict] = []
+    for key in ("primary_window", "secondary_window"):
+        win = rate_limit.get(key)
+        if isinstance(win, dict):
+            windows.append(win)
+
+    for item in data.get("additional_rate_limits") or []:
+        rl = item.get("rate_limit") if isinstance(item, dict) else None
+        if not isinstance(rl, dict):
+            continue
+        for key in ("primary_window", "secondary_window"):
+            win = rl.get(key)
+            if isinstance(win, dict):
+                windows.append(win)
+
+    return windows
+
+
+def _codex_window(data: dict, target_seconds: int) -> dict:
+    candidates = [
+        win for win in _codex_windows(data)
+        if isinstance(win.get("limit_window_seconds"), (int, float))
+    ]
+    if not candidates:
+        return {}
+    return min(candidates, key=lambda win: abs(int(win["limit_window_seconds"]) - target_seconds))
+
+
+def _codex_reset_from_window(win: dict) -> tuple[str, str]:
+    reset_after = win.get("reset_after_seconds")
+    if isinstance(reset_after, (int, float)):
+        reset_str = _fmt_secs_short(int(reset_after))
+        return reset_str, f"in {reset_str}" if reset_str != "now" else "now"
+
+    reset_at = win.get("reset_at") or win.get("resets_at") or win.get("resets")
+    if isinstance(reset_at, (int, float)):
+        reset_str = _fmt_secs_short(int(reset_at - _time.time()))
+        return reset_str, f"in {reset_str}" if reset_str != "now" else "now"
+
+    return "", ""
+
+
 def _claude_common(data: dict) -> tuple[bool, str]:
     """Returns (has_error, error_msg). Call at top of each split parser."""
     if data.get("_unconfigured") or data.get("_error"):
@@ -606,7 +652,7 @@ def parse_generic(data: dict, svc: dict) -> tuple[str, str, list[str]]:
 # Decoded:  {"bucket":"ubi", "quota":1500, "used":1060.5, "hourlyReplenishment":63, ...}
 # Units:    quota/used are in cents  (1500 = $15.00)
 
-AMP_DEFAULT_ENDPOINT = "https://ampcode.com/_app/remote/w6b2h6/getFreeTierUsage"
+AMP_DEFAULT_ENDPOINT = "https://ampcode.com/_app/remote/rjke8/getAccountSettingsPanelData"
 
 
 def _decode_sveltekit(data) -> dict:
@@ -691,9 +737,12 @@ def parse_amp(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     if err := data.get("_error"):
         return f"✗ {err}", "✗", [f"Error: {err}"]
 
-    quota  = data.get("quota")            # cents, e.g. 1500 = $15.00
-    used   = data.get("used")             # cents, e.g. 1060.5
-    hourly = data.get("hourlyReplenishment")  # cents/hr, e.g. 63 = $0.63/hr
+    usage = data.get("freeTierUsage") if isinstance(data.get("freeTierUsage"), dict) else data
+    status = data.get("freeTierStatus") if isinstance(data.get("freeTierStatus"), dict) else {}
+
+    quota  = usage.get("quota")            # cents, e.g. 1500 = $15.00
+    used   = usage.get("used")             # cents, e.g. 1060.5
+    hourly = usage.get("hourlyReplenishment")  # cents/hr, e.g. 63 = $0.63/hr
 
     if quota is None or used is None:
         return "? (see details)", "Amp ?", [f"Raw: {json.dumps(data)[:80]}"]
@@ -709,6 +758,9 @@ def parse_amp(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
     ]
     if hourly:
         details.append(f"Replenishes +${hourly/100:.2f}/hr")
+    multiplier = status.get("freeTierMultiplier")
+    if multiplier and multiplier != 1:
+        details.append(f"Multiplier: {multiplier:g}x")
 
     data["_display_label"] = "Amp 10hr"
     return (
@@ -831,13 +883,14 @@ def parse_codex(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
         return f"✗ {err}", "✗", [f"Error: {err}"]
 
     plan  = data.get("plan_type", "?")
-    pw    = (data.get("rate_limit") or {}).get("primary_window") or {}
+    pw    = _codex_window(data, 5 * 60 * 60)
     pct   = pw.get("used_percent")
 
-    if pct is None:
-        return f"({plan}) ?", "CX ?", [f"Plan: {plan}"]
+    window_seconds = pw.get("limit_window_seconds")
+    if pct is None or not isinstance(window_seconds, (int, float)) or int(window_seconds) > 24 * 60 * 60:
+        return f"({plan}) no 5hr", "CX –", [f"Plan: {plan}", "No 5-hour window in response"]
 
-    reset_str, reset_long = _codex_reset_strings(data)
+    reset_str, reset_long = _codex_reset_from_window(pw)
     bar       = _bar(int(pct))
     bar_lbl   = f"{bar} {int(pct)}% ({reset_str})" if reset_str else f"{bar} {int(pct)}%"
     mb_lbl    = f"CX {int(pct)}%"
@@ -854,15 +907,14 @@ def parse_codex_7d(data: dict, _svc: dict) -> tuple[str, str, list[str]]:
         return f"✗ {err}", "✗", [f"Error: {err}"]
 
     plan  = data.get("plan_type", "?")
-    sw    = (data.get("rate_limit") or {}).get("secondary_window") or {}
+    sw    = _codex_window(data, 7 * 24 * 60 * 60)
     pct   = sw.get("used_percent")
 
-    if pct is None:
-        return f"({plan}) ?", "CX ?", [f"Plan: {plan}", "No secondary_window in response"]
+    window_seconds = sw.get("limit_window_seconds")
+    if pct is None or not isinstance(window_seconds, (int, float)) or int(window_seconds) < 24 * 60 * 60:
+        return f"({plan}) ?", "CX ?", [f"Plan: {plan}", "No weekly window in response"]
 
-    reset_after = sw.get("reset_after_seconds")
-    reset_str   = _fmt_secs_short(int(reset_after)) if isinstance(reset_after, (int, float)) else ""
-    reset_long  = f"in {reset_str}" if reset_str and reset_str != "now" else (reset_str or "")
+    reset_str, reset_long = _codex_reset_from_window(sw)
     bar         = _bar(int(pct))
     bar_lbl     = f"{bar} {int(pct)}% ({reset_str})" if reset_str else f"{bar} {int(pct)}%"
     mb_lbl      = f"CX↗{int(pct)}%"
